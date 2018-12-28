@@ -234,7 +234,7 @@ open class SMStore: NSIncrementalStore {
     /// If true, a sync is triggered automatically when a save operation is performed against the store. Defaults to `true`
     public var syncAutomatically: Bool = SMStore.syncAutomatically
     
-    public typealias SMStoreConflictResolutionBlock = (_ clientRecord:CKRecord,_ serverRecord:CKRecord, _ ancestorRecord:CKRecord )->CKRecord
+    public typealias SMStoreConflictResolutionBlock = (_ serverRecord:CKRecord,_ clientRecord:CKRecord, _ ancestorRecord:CKRecord )->CKRecord
     
     /// The closure that will be invoked to resolve sync conflicts when the `SMStoreSyncConflictResolutionPolicyOption` is set to `clientTellsWhichWins`
     /// - parameter clientRecord:   a `CKRecord` representing the client record state
