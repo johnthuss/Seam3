@@ -248,14 +248,16 @@ class SMStoreChangeSetHandler {
             }
         }
         
-        var ckRecords = [CKRecord]()
+        var ckRecords = [String:CKRecord]()
         if !results.isEmpty {
             let recordIDSubstitution = "recordIDString"
             let predicate = NSPredicate(format: "%K == $recordIDString", SMStore.SMLocalStoreRecordIDAttributeName)
             for result in results {
                 result.setValue(NSNumber(value: true as Bool), forKey: SMStoreChangeSetHandler.SMLocalStoreChangeQueuedAttributeName)
                 if let entityName: String = result.value(forKey: SMStoreChangeSetHandler.SMLocalStoreEntityNameAttributeName) as? String,
-                    let recordIDString: String = result.value(forKey: SMStore.SMLocalStoreRecordIDAttributeName) as? String {
+                    let recordIDString: String = result.value(forKey: SMStore.SMLocalStoreRecordIDAttributeName) as? String,
+                    ckRecords[recordIDString] == nil {
+                    
                     let fetchRequest = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
                     fetchRequest.predicate = predicate.withSubstitutionVariables([recordIDSubstitution:recordIDString])
                     fetchRequest.fetchLimit = 1
@@ -270,7 +272,7 @@ class SMStoreChangeSetHandler {
                             }
                             
                             if let ckRecord = object.createOrUpdateCKRecord(usingValuesOfChangedKeys: changedPropertyKeysArray) {
-                                ckRecords.append(ckRecord)
+                                ckRecords[recordIDString] = ckRecord
                             }
                         }
                     }
@@ -278,7 +280,7 @@ class SMStoreChangeSetHandler {
             }
         }
         try context.saveIfHasChanges()
-        return ckRecords
+        return Array(ckRecords.values)
     }
     
     func removeAllQueuedChangeSetsFromQueue(backingContext context: NSManagedObjectContext) throws {
