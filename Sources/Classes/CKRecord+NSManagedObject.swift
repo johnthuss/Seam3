@@ -63,7 +63,23 @@ extension CKRecord {
     
     fileprivate func allAttributeValuesAsManagedObjectAttributeValues(usingContext context: NSManagedObjectContext) -> [String:AnyObject]? {
         if let entity = context.persistentStoreCoordinator?.managedObjectModel.entitiesByName[self.recordType] {
-            return self.dictionaryWithValues(forKeys: self.allAttributeKeys(usingAttributesByNameFromEntity: entity.attributesByName)) as [String : AnyObject]?
+            
+            // use the keys from the CoreData entity rather than the CloudKit record since keys with null values are not present in CloudKit records. This important for allowing changing from value -> null to sync to other clients
+            let attrs = entity.attributesByNameByRemovingBackingStoreAttributes()
+            let values = self.dictionaryWithValues(forKeys: Array(attrs.values).map { $0.name }) as [String : AnyObject]
+            
+            // CloudKit records used to omit default property values, so we need to avoid setting them to null if that is not allowed.
+            let settableValues = values.filter { (key: String, value: AnyObject) -> Bool in
+                let isOptional = attrs[key]?.isOptional ?? true
+                if (!isOptional && value is NSNull) {
+                    return false
+                }
+                return true
+            }
+            if (settableValues.count != values.count) {
+                SMStore.logger?.error("Cloud record has some invalid values: \(self)")
+            }
+            return settableValues
         } else {
             return nil
         }
