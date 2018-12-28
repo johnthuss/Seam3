@@ -181,26 +181,25 @@ class SMStoreChangeSetHandler {
     
     
     func recordIDsForDeletedObjects(_ backingContext: NSManagedObjectContext) throws -> [CKRecord.ID]? {
-        let propertiesToFetch = [SMStore.SMLocalStoreRecordIDAttributeName]
-        if let deletedObjectsChangeSets = try self.changeSets(ForChangeType: SMLocalStoreRecordChangeType.recordDeleted, propertiesToFetch: propertiesToFetch, backingContext: backingContext) {
-            if !deletedObjectsChangeSets.isEmpty  {
-                var recordIDSet = Set<String>()
-                let recordIDs = deletedObjectsChangeSets.compactMap({ (object) -> CKRecord.ID? in
-                    let valuesDictionary: Dictionary<String,NSObject> = object as! Dictionary<String,NSObject>
-                    let recordID: String = valuesDictionary[SMStore.SMLocalStoreRecordIDAttributeName] as! String
-                    let cksRecordZoneID: CKRecordZone.ID = CKRecordZone.ID(zoneName: SMStore.SMStoreCloudStoreCustomZoneName, ownerName: CKCurrentUserDefaultName)
-                    // Makes sure we don't delete the same object twice
-                    // otherwise the syncOperation will return "Invalid Arguments"
-                    if recordIDSet.contains(recordID) {
-                        return nil
-                    } else {
-                        recordIDSet.insert(recordID)
-                        return CKRecord.ID(recordName: recordID, zoneID: cksRecordZoneID)
-                    }
-                })
-                return recordIDs
-            }
+        let fetchRequest = NSFetchRequest<NSFetchRequestResult>(entityName: SMStore.SMLocalStoreChangeSetEntityName)
+        fetchRequest.predicate = NSPredicate(format: "%K == %@", SMStoreChangeSetHandler.SMLocalStoreChangeTypeAttributeName, NSNumber(value: SMLocalStoreRecordChangeType.recordDeleted.rawValue as Int16))
+        guard let results = try backingContext.fetch(fetchRequest) as? [NSManagedObject] else {
+            throw SMStoreError.backingStoreUpdateError
         }
+        
+        if !results.isEmpty {
+            let result = results.map({ (object) -> CKRecord.ID in
+                object.setValue(NSNumber(value: true as Bool), forKey: SMStoreChangeSetHandler.SMLocalStoreChangeQueuedAttributeName)
+
+                let recordId = object.value(forKey: SMStore.SMLocalStoreRecordIDAttributeName) as? String ?? ""
+                let cksRecordZoneID: CKRecordZone.ID = CKRecordZone.ID(zoneName: SMStore.SMStoreCloudStoreCustomZoneName, ownerName: CKCurrentUserDefaultName)
+                return CKRecord.ID(recordName: recordId, zoneID: cksRecordZoneID)
+            })
+            
+            try backingContext.saveIfHasChanges()
+            return result
+        }
+        
         return nil
     }
     
