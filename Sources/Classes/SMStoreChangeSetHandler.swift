@@ -146,7 +146,12 @@ class SMStoreChangeSetHandler {
     
     func createChangeSet(ForUpdatedObject object: NSManagedObject, usingContext context: NSManagedObjectContext) {
         let changeSet = NSEntityDescription.insertNewObject(forEntityName: SMStore.SMLocalStoreChangeSetEntityName, into: context)
-        let changedPropertyKeys = self.changedPropertyKeys(Array(object.changedValues().keys), entity: object.entity)
+        
+        // NSMangedObject.changedValues does not include default values for new objects, so we have to use a custom method to ensure the complete record is uploaded initially.
+        // Also, it's not safe to upload partial records (only changes) because it assumes the record already exists in the cloud which isn't guaranteed.
+        // While using NSMangedObject.changedValues could reduce network traffic and potentially make resolving conflicts easier, the risk of getting stuck in a cycle trying to apply partial cloud changes that fail CoreData validation over and over are not worth it.
+        let keys = object.allValuesExceptBackingStoreAttributes().keys
+        let changedPropertyKeys = self.changedPropertyKeys(Array(keys), entity: object.entity)
         let recordIDString: String = object.value(forKey: SMStore.SMLocalStoreRecordIDAttributeName) as! String
         let changedPropertyKeysString = changedPropertyKeys.joined(separator: ",")
         changeSet.setValue(recordIDString, forKey: SMStore.SMLocalStoreRecordIDAttributeName)
