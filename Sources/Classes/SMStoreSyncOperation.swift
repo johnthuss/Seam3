@@ -204,21 +204,23 @@ class SMStoreSyncOperation: Operation {
         SMStore.logger?.debug("Will attempt deleting from the cloud \(deletedCKRecordIDs?.count ?? 0) CKRecords \((deletedCKRecordIDs ?? []).map {$0.recordName})")
         let ckModifyRecordsOperation = CKModifyRecordsOperation(recordsToSave: Array(changedRecords.values), recordIDsToDelete: deletedCKRecordIDs)
         ckModifyRecordsOperation.database = self.database
-        let savedRecords: [CKRecord] = [CKRecord]()
+        var outerSavedRecords: [CKRecord] = []
+        var outerDeletedRecordIDs: [CKRecord.ID] = []
         var conflictedRecords = [SeamConflictedRecord]()
         ckModifyRecordsOperation.modifyRecordsCompletionBlock = ({(savedRecords,deletedRecordIDs,operationError)->Void in
+            outerSavedRecords = savedRecords ?? []
+            outerDeletedRecordIDs = deletedRecordIDs ?? []
             if operationError != nil {
-                var operationErrorWillbeHandled = false
                 if let error = operationError as? CKError {
                     if let recordErrors = error.userInfo[CKPartialErrorsByItemIDKey] as? [CKRecord.ID:CKError] {
                         for recordError in recordErrors.values {
                             if recordError.code != CKError.serverRecordChanged {
-                                operationErrorWillbeHandled = true
+                                let underLyingerror = error.userInfo["NSUnderlyingError"] as? CKError ?? recordError
+                                SMStore.logger?.error("Operation error: \(underLyingerror.localizedDescription)")
                             }
                         }
                     }
                 }
-                SMStore.logger?.error("Operation error: \(operationError!) (will be handled with conflict resolution=\(operationErrorWillbeHandled)")
             }
         })
         ckModifyRecordsOperation.perRecordCompletionBlock = ({(ckRecord,operationError)->Void in
@@ -249,23 +251,7 @@ class SMStoreSyncOperation: Operation {
             SMStore.logger?.info("OK Conflict while updating CKRecords in the cloud \n\(conflictedRecords)")
             throw conflict
         }
-        if !savedRecords.isEmpty {
-            let recordIDSubstitution = "recordIDSubstitution"
-            let fetchPredicate: NSPredicate = NSPredicate(format: "%K == $recordIDSubstitution", SMStore.SMLocalStoreRecordIDAttributeName)
-            for record in savedRecords {
-                let fetchRequest = NSFetchRequest<NSFetchRequestResult>(entityName: record.recordType)
-                let recordIDString: String = record.value(forKey: SMStore.SMLocalStoreRecordIDAttributeName) as! String
-                fetchRequest.predicate = fetchPredicate.withSubstitutionVariables([recordIDSubstitution:recordIDString])
-                fetchRequest.fetchLimit = 1
-                let results = try self.localStoreMOC!.fetch(fetchRequest)
-                if results.count > 0 {
-                    let managedObject = results.last as? NSManagedObject
-                    let encodedFields = record.encodedSystemFields()
-                    managedObject?.setValue(encodedFields, forKey: SMStore.SMLocalStoreRecordEncodedValuesAttributeName)
-                }
-            }
-            try self.localStoreMOC.saveIfHasChanges()
-        }
+        SMStore.logger?.info("Uploaded \(outerSavedRecords.count) inserts/updates and \(outerDeletedRecordIDs.count) deletes to the cloud")
     }
     
     fileprivate func resolveConflicts(_ conflictedRecords: [SeamConflictedRecord]) -> [CKRecord]
