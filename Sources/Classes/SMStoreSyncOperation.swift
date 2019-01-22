@@ -341,16 +341,17 @@ class SMStoreSyncOperation: Operation {
         var optionsByRecordZoneID = [CKRecordZone.ID: CKFetchRecordZoneChangesOperation.ZoneOptions]()
         optionsByRecordZoneID[recordZoneID] = options
         fetchRecordChangesOperation.optionsByRecordZoneID = optionsByRecordZoneID
-
         fetchRecordChangesOperation.database = self.database
+
         var insertedOrUpdatedCKRecords: [CKRecord] = [CKRecord]()
         var deletedCKRecordIDs: [CKRecord.ID] = [CKRecord.ID]()
         fetchRecordChangesOperation.recordZoneFetchCompletionBlock = { recordZoneID, serverChangeToken, clientChangeTokenData, moreComing, recordZoneError in
             SMStore.logger?.debug("OK (sync operation) recordZoneFetchCompletionBlock called with serverChangeToken=\(String(describing: serverChangeToken)), clientChangeTokenData=\(String(describing: clientChangeTokenData))")
-
-            if let token = serverChangeToken {
-                SMServerTokenHandler.defaultHandler.save(serverChangeToken: token)
+            guard let token = serverChangeToken, recordZoneError == nil else {
+                syncOperationError = recordZoneError
+                return
             }
+            SMServerTokenHandler.defaultHandler.save(serverChangeToken: token)
         }
         fetchRecordChangesOperation.recordZoneChangeTokensUpdatedBlock = { recordZoneID, serverChangeToken, clientChangeTokenData in
             SMStore.logger?.debug("OK (sync operation) recordZoneChangeTokensUpdatedBlock called with serverChangeToken=\(String(describing: serverChangeToken)), clientChangeTokenData=\(String(describing: clientChangeTokenData))")
