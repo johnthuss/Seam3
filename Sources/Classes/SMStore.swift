@@ -411,6 +411,7 @@ open class SMStore: NSIncrementalStore {
         defaults.set(false, forKey:SMStore.SMStoreCloudStoreCustomZoneName)
         
         defaults.set(false, forKey:SMStore.SMStoreCloudStoreSubscriptionName)
+        defaults.synchronize()
     }
     
     /// Retrieve an `NSPredicate` that will match the supplied `NSManagedObject`.

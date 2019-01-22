@@ -429,7 +429,6 @@ class SMStoreSyncOperation: Operation {
         SMStore.logger?.debug("OK (sync operation) cloud changes detected: \(insertedOrUpdatedCKRecords.count) insertedOrUpdated\n\(insertedIds)")
         SMStore.logger?.debug("OK (sync operation) cloud changes detected: \(deletedCKRecordIDs.count) deleted\n\(deletedIds)")
         
-        SMServerTokenHandler.defaultHandler.commit()
         return (insertedOrUpdatedCKRecords, deletedCKRecordIDs)
     }
     
