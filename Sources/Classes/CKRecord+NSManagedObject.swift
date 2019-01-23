@@ -115,32 +115,36 @@ extension CKRecord {
         return nil
     }
     
-    public func createOrUpdateManagedObjectFromRecord(usingContext context: NSManagedObjectContext) throws -> NSManagedObject? {
-        
-        if let entity = context.persistentStoreCoordinator?.managedObjectModel.entitiesByName[self.recordType] {
-            if let entityName = entity.name  {
-                var managedObject: NSManagedObject?
-                let recordIDString = self.recordID.recordName
-                let fetchRequest = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
-                fetchRequest.fetchLimit = 1
-                fetchRequest.predicate = NSPredicate(format: "%K == %@", SMStore.SMLocalStoreRecordIDAttributeName, recordIDString)
-                let results = try context.fetch(fetchRequest)
-                if !results.isEmpty {
-                    managedObject = results.last as? NSManagedObject
-                    SMStore.logger?.debug("OK will update existing object from CKRecord \(entityName), recordID=\(recordIDString)")
-                }
-                
-                if managedObject == nil {
-                    managedObject = NSEntityDescription.insertNewObject(forEntityName: entityName, into: context)
-                    managedObject!.setValue(recordIDString, forKey: SMStore.SMLocalStoreRecordIDAttributeName)
-                    SMStore.logger?.debug("OK will insert new object from CKRecord \(entityName), recordID=\(recordIDString)")
-                }
-                
-                try self.setValuesOn(managedObject!, inContext:context)
-                return managedObject
-            }
+    public func managedObjectForRecord(context: NSManagedObjectContext) throws -> NSManagedObject? {
+        guard let entity = context.persistentStoreCoordinator?.managedObjectModel.entitiesByName[self.recordType],
+            let entityName = entity.name else {
+            throw SMStoreError.backingStoreUpdateError
         }
-        throw SMStoreError.backingStoreUpdateError
+        var managedObject: NSManagedObject?
+        let fetchRequest = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
+        fetchRequest.fetchLimit = 1
+        fetchRequest.predicate = NSPredicate(format: "%K == %@", SMStore.SMLocalStoreRecordIDAttributeName, self.recordID.recordName)
+        let results = try context.fetch(fetchRequest)
+        if !results.isEmpty {
+            managedObject = results.last as? NSManagedObject
+        }
+        return managedObject;
+    }
+    
+    public func createOrUpdateManagedObjectFromRecord(usingContext context: NSManagedObjectContext) throws -> NSManagedObject? {
+        guard let entity = context.persistentStoreCoordinator?.managedObjectModel.entitiesByName[self.recordType],
+            let entityName = entity.name else {
+            throw SMStoreError.backingStoreUpdateError
+        }
+
+        var managedObject = try managedObjectForRecord(context: context)
+        if managedObject == nil {
+            managedObject = NSEntityDescription.insertNewObject(forEntityName: entityName, into: context)
+            managedObject!.setValue(self.recordID.recordName, forKey: SMStore.SMLocalStoreRecordIDAttributeName)
+        }
+        
+        try self.setValuesOn(managedObject!, inContext:context)
+        return managedObject
     }
     
     
