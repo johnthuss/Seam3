@@ -232,7 +232,7 @@ open class SMStore: NSIncrementalStore {
     weak public static var logger: SMLogDelegate? = SMLogger.sharedInstance
     
     /// If true, a sync is triggered automatically when a save operation is performed against the store. Defaults to `true`
-    public var syncAutomatically: Bool = SMStore.syncAutomatically
+    @objc public var syncAutomatically: Bool = SMStore.syncAutomatically
     
     public typealias SMStoreConflictResolutionBlock = (_ serverRecord:CKRecord,_ clientRecord:CKRecord, _ ancestorRecord:CKRecord )->CKRecord
     
@@ -240,10 +240,10 @@ open class SMStore: NSIncrementalStore {
     /// - parameter clientRecord:   a `CKRecord` representing the client record state
     /// - parameter serverRecord:   a `CKRecord` representing the server (cloud) record state
     /// - returns: The record that will be saved to both the client and cloud
-    public var recordConflictResolutionBlock: SMStoreConflictResolutionBlock?
+    @objc public var recordConflictResolutionBlock: SMStoreConflictResolutionBlock?
     
-    public static let SMStoreSyncConflictResolutionPolicyOption = "SMStoreSyncConflictResolutionPolicyOption"
-    public static let SMStoreErrorDomain = "SMStoreErrorDomain"
+    @objc public static let SMStoreSyncConflictResolutionPolicyOption = "SMStoreSyncConflictResolutionPolicyOption"
+    @objc public static let SMStoreErrorDomain = "SMStoreErrorDomain"
     
     /**
      The default Cloud Kit container is named using your app or application's *bundle identifier*.  If you want to share Cloud Kit data between apps on different platforms (e.g. iOS and macOS) then you need to use a named Cloud Kit container.  You can specify a cloud kit container when you create your SMStore instance.
@@ -322,7 +322,7 @@ open class SMStore: NSIncrementalStore {
      to create a store
      */
     
-    public class func registerStoreClass() {
+    @objc public class func registerStoreClass() {
         if !storeRegistered {
             NSPersistentStoreCoordinator.registerStoreClass(self, forStoreType: self.type)
             storeRegistered = true
@@ -370,7 +370,7 @@ open class SMStore: NSIncrementalStore {
     
     /// The type string of the receiver. (`SMStore`)
     
-    class open var type:String {
+    @objc class open var type:String {
         return NSStringFromClass(self)
     }
     
@@ -390,7 +390,7 @@ open class SMStore: NSIncrementalStore {
     
     /// Reset the backing store.  This function should be called where the local store should be cleared prior to a re-sync from the cloud.  E.g. Where a change in CloudKit user has been identified.
     /// - throws: An `SMStoreError` if the backing store could not be reset
-    public func resetBackingStore() throws {
+    @objc public func resetBackingStore() throws {
         
         guard let backingMOM = self.backingModel() else {
             throw SMStoreError.backingStoreResetFailed
@@ -423,7 +423,7 @@ open class SMStore: NSIncrementalStore {
     }
     
     /// Marks all local data for resending to the cloud as new objects. For use with a new user or when the custom Zone was deleted.
-    public func resetCloudFieldsInBackingStore() throws {
+    @objc public func resetCloudFieldsInBackingStore() throws {
         let defaults = UserDefaults.standard
         defaults.set(false, forKey:SMStore.SMStoreCloudStoreCustomZoneName)
         defaults.set(false, forKey:SMStore.SMStoreCloudStoreSubscriptionName)
@@ -544,7 +544,7 @@ open class SMStore: NSIncrementalStore {
     ///   Note that this is not a userid or email address, merely a unique identifier
     /// - parameter error: Any error that resulted from the operation
     
-    open func verifyCloudKitConnectionAndUser(_ completionHandler: ((_ status: CKAccountStatus, _ userIdentifier: String?, _ error: Error?) -> Void )?) -> Void {
+    @objc open func verifyCloudKitConnectionAndUser(_ completionHandler: ((_ status: CKAccountStatus, _ userIdentifier: String?, _ error: Error?) -> Void )?) -> Void {
         guard let container = self.ckContainer else {
             completionHandler?(CKAccountStatus.couldNotDetermine ,nil,SMStoreError.invalidRequest)
             return
@@ -584,7 +584,7 @@ open class SMStore: NSIncrementalStore {
      self.triggerSync(block: false, complete: complete, fetchCompletionHandler: nil)
      }*/
     
-    open func triggerSync(complete: Bool = false, fetchCompletionHandler completion: ((FetchResult, Error?)->Void)? = nil) {
+    @objc open func triggerSync(complete: Bool = false, fetchCompletionHandler completion: ((FetchResult, Error?)->Void)? = nil) {
         guard self.cloudKitValid else {
             SMStore.logger?.error("Access to CloudKit has not been verified by calling verifyCloudKitConnection")
             return
@@ -654,7 +654,7 @@ open class SMStore: NSIncrementalStore {
     /// Handle a push notification that indicates records have been updated in Cloud Kit
     /// - parameter userInfo: The userInfo dictionary from the push notification
     
-    open func handlePush(userInfo:[AnyHashable: Any], fetchCompletionHandler completionHandler: ((FetchResult) -> Void)?=nil) {
+    @objc open func handlePush(userInfo:[AnyHashable: Any], fetchCompletionHandler completionHandler: ((FetchResult) -> Void)?=nil) {
         let u = userInfo as! [String : NSObject]
         let ckNotification = CKNotification(fromRemoteNotificationDictionary: u)
         if ckNotification.notificationType == CKNotification.NotificationType.recordZone {
@@ -1127,7 +1127,7 @@ open class SMStore: NSIncrementalStore {
 
 // MARK: - Fetch Result
 
-public enum FetchResult: UInt {
+@objc public enum FetchResult: UInt {
     case newData = 0
     case noData = 1
     case failed = 2
