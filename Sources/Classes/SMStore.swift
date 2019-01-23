@@ -296,7 +296,16 @@ open class SMStore: NSIncrementalStore {
         moc.persistentStoreCoordinator = self.backingPersistentStoreCoordinator
         moc.retainsRegisteredObjects = true
         moc.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
-        return moc     }()
+        return moc
+    }()
+    
+    fileprivate lazy var localStoreMOC: NSManagedObjectContext = {
+        var moc = NSManagedObjectContext(concurrencyType: NSManagedObjectContextConcurrencyType.privateQueueConcurrencyType)
+        moc.persistentStoreCoordinator = self.persistentStoreCoordinator
+        moc.retainsRegisteredObjects = true
+        moc.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        return moc
+    }()
     
     fileprivate static var storeRegistered = false
     
@@ -405,7 +414,6 @@ open class SMStore: NSIncrementalStore {
             }
         }
         
-        
         let defaults = UserDefaults.standard
         
         defaults.set(false, forKey:SMStore.SMStoreCloudStoreCustomZoneName)
@@ -413,6 +421,46 @@ open class SMStore: NSIncrementalStore {
         defaults.set(false, forKey:SMStore.SMStoreCloudStoreSubscriptionName)
         defaults.synchronize()
     }
+    
+    /// Marks all local data for resending to the cloud as new objects. For use with a new user or when the custom Zone was deleted.
+    public func resetCloudFieldsInBackingStore() throws {
+        let defaults = UserDefaults.standard
+        defaults.set(false, forKey:SMStore.SMStoreCloudStoreCustomZoneName)
+        defaults.set(false, forKey:SMStore.SMStoreCloudStoreSubscriptionName)
+        defaults.synchronize()
+        
+        self.backingMOC.performAndWait {
+            do {
+                for entity in entitiesToParticipateInSync() ?? [] {
+                    let fetchRequest = NSFetchRequest<NSManagedObject>(entityName: entity.name!)
+                    fetchRequest.predicate = NSPredicate(format: "\(SMStore.SMLocalStoreRecordEncodedValuesAttributeName) != null")
+                    let records = try self.backingMOC.fetch(fetchRequest)
+                    for record in records {
+                        // clear CloudKit encoded values
+                        record.setValue(nil, forKey: SMStore.SMLocalStoreRecordEncodedValuesAttributeName)
+                    }
+                }
+                try self.backingMOC.saveIfHasChanges()
+
+                for entity in entitiesToParticipateInSync() ?? [] {
+                    let fetchRequest = NSFetchRequest<NSManagedObject>(entityName: entity.name!)
+                    let records = try self.localStoreMOC.fetch(fetchRequest)
+                    for record in records {
+                        // touch the record data
+                        if let key = entity.attributesByNameByRemovingBackingStoreAttributes().keys.first {
+                            let value = record.value(forKey: key)
+                            record.setValue(value, forKey: key)
+                        }
+                    }
+                }
+                try self.localStoreMOC.saveIfHasChanges()
+                
+            } catch {
+                SMStore.logger?.error("Failed to reset cloud fields in backing store: \(error.localizedDescription)")
+            }
+        }
+    }
+
     
     /// Retrieve an `NSPredicate` that will match the supplied `NSManagedObject`.
     /// - parameter for: The name of the relationship that holds the reference to the target object
