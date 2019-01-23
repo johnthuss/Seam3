@@ -78,7 +78,7 @@ class SMStoreSyncOperation: Operation {
     fileprivate var database: CKDatabase?
     fileprivate let RETRYLIMIT = 5
     var syncConflictPolicy: SMSyncConflictResolutionPolicy
-    var syncCompletionBlock: ((_ syncError:NSError?) -> ())?
+    var syncCompletionBlock: ((_ result: FetchResult, _ syncError:NSError?) -> ())?
     
     var syncConflictResolutionBlock: SMStore.SMStoreConflictResolutionBlock?
     
@@ -103,10 +103,10 @@ class SMStoreSyncOperation: Operation {
         if let completionBlock = self.syncCompletionBlock {
             NotificationCenter.default.removeObserver(self)
             do {
-                try self.performSync()
-                completionBlock(nil)
+                let result = try self.performSync()
+                completionBlock(result, nil)
             } catch let error as NSError {
-                completionBlock(error)
+                completionBlock(.failed, error)
             }
         }
         
@@ -123,15 +123,19 @@ class SMStoreSyncOperation: Operation {
         var deletedCKRecordIDs: [CKRecord.ID] = []
     }
     
-    func performSync() throws {
+    func performSync() throws -> FetchResult {
         let localChangesInServerRepresentation = try self.localChangesInServerRepresentation()
-        try performSync(localChanges: localChangesInServerRepresentation)
+        return try performSync(localChanges: localChangesInServerRepresentation)
     }
     
-    private func performSync(localChanges: LocalChanges) throws {
+    private func performSync(localChanges: LocalChanges) throws -> FetchResult {
+        let hasLocalChanges =
+                localChanges.insertedOrUpdatedCKRecords.count != 0 ||
+                localChanges.deletedCKRecordIDs.count != 0
+        var hasRemoteChanges = false
         do {
             try self.applyLocalChangesToServer(insertedOrUpdatedCKRecords: localChanges.insertedOrUpdatedCKRecords, deletedCKRecordIDs: localChanges.deletedCKRecordIDs)
-            try self.fetchAndApplyServerChangesToLocalDatabase()
+            hasRemoteChanges = try self.fetchAndApplyServerChangesToLocalDatabase()
             SMServerTokenHandler.defaultHandler.commit()
             try SMStoreChangeSetHandler.defaultHandler.removeAllQueuedChangeSets(backingContext: self.localStoreMOC!)
         } catch SMSyncOperationError.conflictsDetected(let conflictedRecords) {
@@ -146,10 +150,10 @@ class SMStoreSyncOperation: Operation {
             }
             var localChangesResolved = localChanges
             localChangesResolved.insertedOrUpdatedCKRecords = Array(insertedOrUpdatedCKRecordsWithRecordIDStrings.values)
-            try performSync(localChanges: localChangesResolved)
+            return try performSync(localChanges: localChangesResolved)
         } catch SMSyncOperationError.shouldRetryError {
             SMStore.logger?.info("Retrying performSync")
-            try performSync()
+            return try performSync()
         } catch {
             SMStore.logger?.error("ERROR during performSync() \(error.localizedDescription)")
             #if DEBUG
@@ -167,10 +171,14 @@ class SMStoreSyncOperation: Operation {
             #endif
             throw error
         }
+        return hasLocalChanges || hasRemoteChanges ? .newData : .noData
     }
     
-    func fetchAndApplyServerChangesToLocalDatabase() throws {
+    func fetchAndApplyServerChangesToLocalDatabase() throws -> Bool {
         let returnValue = self.fetchRecordChangesFromServer()
+        let hasNewData =
+            returnValue.insertedOrUpdatedCKRecords.count != 0 ||
+            returnValue.deletedRecordIDs.count != 0
         var executeError: Error?
         self.localStoreMOC.performAndWait {
             do {
@@ -182,6 +190,7 @@ class SMStoreSyncOperation: Operation {
         if let error = executeError {
             throw error
         }
+        return hasNewData
     }
     
     // MARK: Local Changes

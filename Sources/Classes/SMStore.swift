@@ -584,7 +584,7 @@ open class SMStore: NSIncrementalStore {
      self.triggerSync(block: false, complete: complete, fetchCompletionHandler: nil)
      }*/
     
-    open func triggerSync(complete: Bool = false, fetchCompletionHandler completion: ((Error?)->Void)? = nil) {
+    open func triggerSync(complete: Bool = false, fetchCompletionHandler completion: ((FetchResult, Error?)->Void)? = nil) {
         guard self.cloudKitValid else {
             SMStore.logger?.error("Access to CloudKit has not been verified by calling verifyCloudKitConnection")
             return
@@ -606,14 +606,14 @@ open class SMStore: NSIncrementalStore {
                 OperationQueue.main.addOperation {
                     NotificationCenter.default.post(name: Notification.Name(rawValue: SMStoreNotification.SyncDidFinish), object: self, userInfo: [SMStore.SMStoreErrorDomain:error])
                 }
-                completion?(error)
+                completion?(.failed, error)
             } else {
                 
                 self.syncOperation = SMStoreSyncOperation(persistentStoreCoordinator: self.backingPersistentStoreCoordinator, entitiesToSync: self.entitiesToParticipateInSync()!, conflictPolicy: self.cksStoresSyncConflictPolicy, database: self.database, backingMOC: self.backingMOC)
                 
                 self.syncOperation!.syncConflictResolutionBlock = self.recordConflictResolutionBlock
                 
-                self.syncOperation!.syncCompletionBlock =  { error in
+                self.syncOperation!.syncCompletionBlock =  { result, error in
                     if let error = error {
                         SMStore.logger?.error("Sync failed \(error)")
                         OperationQueue.main.addOperation {
@@ -625,7 +625,7 @@ open class SMStore: NSIncrementalStore {
                             NotificationCenter.default.post(name: Notification.Name(rawValue: SMStoreNotification.SyncDidFinish), object: self)
                         }
                     }
-                    completion?(error)
+                    completion?(result, error)
                 }
                 self.operationQueue?.addOperation(self.syncOperation!)
             }
@@ -662,11 +662,11 @@ open class SMStore: NSIncrementalStore {
             if let zoneID = recordZoneNotification.recordZoneID {
                 if zoneID.zoneName == SMStore.SMStoreCloudStoreCustomZoneName {
                     //self.triggerSync(block: true)
-                    self.triggerSync(complete: false) { error in
+                    self.triggerSync(complete: false) { (result, error) in
                         if error != nil {
                             completionHandler?(.failed)
                         } else {
-                            completionHandler?(.newData)
+                            completionHandler?(result)
                         }
                     }
                 }
