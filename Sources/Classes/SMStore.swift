@@ -542,6 +542,11 @@ open class SMStore: NSIncrementalStore {
             return
         }
         
+        if UserDefaults.standard.bool(forKey: SMStore.SMStoreCloudStoreCustomZoneName) == false ||
+            UserDefaults.standard.bool(forKey: SMStore.SMStoreCloudStoreSubscriptionName) == false {
+            SMServerTokenHandler.defaultHandler.delete()
+        }
+        
         if complete {
             SMServerTokenHandler.defaultHandler.delete()
         }

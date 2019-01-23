@@ -219,13 +219,13 @@ class SMStoreSyncOperation: Operation {
         var outerSavedRecords: [CKRecord] = []
         var outerDeletedRecordIDs: [CKRecord.ID] = []
         var conflictedRecords = [SeamConflictedRecord]()
+        var shouldResetZone = false
         var shouldRetry = false
         ckModifyRecordsOperation.modifyRecordsCompletionBlock = ({(savedRecords,deletedRecordIDs,operationError)->Void in
             outerSavedRecords = savedRecords ?? []
             outerDeletedRecordIDs = deletedRecordIDs ?? []
         })
         ckModifyRecordsOperation.perRecordCompletionBlock = ({(ckRecord,operationError)->Void in
-            
             guard let error = operationError as? CKError else {
                 SMStore.logger?.debug("OK Completed CKRecord operation (change/insert or delete to the cloud) for \(ckRecord.recordID.recordName)")
                 return
@@ -254,10 +254,18 @@ class SMStoreSyncOperation: Operation {
                     SMStore.logger?.error("Failed to fetch and clear CloudKit encoded values from matching ManagedObject for \(ckRecord.recordID.recordName)")
                 }
             }
+            else if underLyingerror.code == .userDeletedZone ||
+                underLyingerror.code == .zoneNotFound {
+                shouldResetZone = true
+            }
         })
         
         self.operationQueue.addOperation(ckModifyRecordsOperation)
         self.operationQueue.waitUntilAllOperationsAreFinished()
+        if shouldResetZone {
+            UserDefaults.standard.set(false, forKey:SMStore.SMStoreCloudStoreCustomZoneName)
+            // TODO: should retry here after executing SMServerStoreSetupOperation, but that is tricky currently
+        }
         guard conflictedRecords.isEmpty else {
             let conflict = SMSyncOperationError.conflictsDetected(conflictedRecords: conflictedRecords)
             throw conflict
