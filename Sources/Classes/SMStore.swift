@@ -419,7 +419,6 @@ open class SMStore: NSIncrementalStore {
         defaults.set(false, forKey:SMStore.SMStoreCloudStoreCustomZoneName)
         
         defaults.set(false, forKey:SMStore.SMStoreCloudStoreSubscriptionName)
-        defaults.synchronize()
     }
     
     /// Marks all local data for resending to the cloud as new objects. For use with a new user or when the custom Zone was deleted.
